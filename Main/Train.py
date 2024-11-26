@@ -331,9 +331,6 @@ def train_SVM(tts):
     from sklearn.metrics import accuracy_score
 
     parameters = {
-        'C': [0.1, 1, 10, 100],
-        'gamma': [1, 0.1, 0.01, 0.001],
-        'kernel': ['rbf', 'poly', 'sigmoid', 'linear']
     }
 
     # SVM
@@ -355,6 +352,11 @@ def train_SVM(tts):
     print("TEST Classification Report:")
     print(classification_report(ValLabel, predictionsTest))
     print("Accuracy:", accuracy_score(ValLabel, predictionsTest))
+    # 混淆矩阵
+    from sklearn.metrics import confusion_matrix
+
+    cm = confusion_matrix(ValLabel, predictionsTest)
+    print(cm)
 
 def train_RF(tts):
     print("-" * 50)
@@ -442,5 +444,5 @@ rand = 3407
 
 if __name__ == '__main__':
     # train_transformer_decoder(BatchSize, lr, Epoch, 0.2)
-    # train_SVM(0.2)
-    train_RF(0.2)
+    train_SVM(0.2)
+    # train_RF(0.2)
