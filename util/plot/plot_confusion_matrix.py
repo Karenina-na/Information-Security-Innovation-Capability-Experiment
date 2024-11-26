@@ -5,7 +5,7 @@ import numpy as np
 
 
 # 画混淆矩阵
-def plot_confusion_matrix(cm, classes, normalize=False, title='Confusion matrix', cmap=plt.cm.Greens):
+def plot_confusion_matrix(cm, classes, classes_x, normalize=False, title='Confusion matrix', cmap=plt.cm.Greens):
     """
     - cm :  the value of the confusion matrix calculated
     - classes : the column corresponding to each row and column in the confusion matrix
@@ -29,7 +29,7 @@ def plot_confusion_matrix(cm, classes, normalize=False, title='Confusion matrix'
         plt.text(j, i, format(cm[i, j], fmt),
                  horizontalalignment="center",
                  verticalalignment='center',
-                 color="white" if cm[i, j] > thresh else "black", fontweight='bold', fontsize=20)
+                 color="white" if cm[i, j] > thresh else "black", fontweight='bold', fontsize=6)
     plt.rcParams['font.sans-serif'] = ['Times New Roman']  # 设置字体
     # ------------------------------- # 标题
     plt.title(title, fontsize=22, fontweight='bold')  # 标题
@@ -44,17 +44,18 @@ def plot_confusion_matrix(cm, classes, normalize=False, title='Confusion matrix'
     # ------------------------------- # 坐标轴
     tick_marks = np.arange(len(classes))
 
-    plt.yticks(tick_marks, classes, fontweight='bold')  # 纵轴坐标名称
+    plt.yticks(tick_marks, classes, fontweight='bold', fontsize=5)  # 纵轴坐标名称
     plt.ylim(len(classes) - 0.5, -0.5)  # 纵轴坐标范围
     plt.ylabel('True label', fontsize=20, fontweight='bold')  # 纵轴坐标名称
-    plt.gca().yaxis.set_label_coords(-0.1, 0.5)  # 纵轴坐标名称位置
+    plt.gca().yaxis.set_label_coords(-0.5, 0.5)  # 纵轴坐标名称位置
 
-    plt.xticks(tick_marks, classes, fontweight='bold', rotation=45)  # 横轴坐标名称
+    plt.xticks(tick_marks, classes_x, fontweight='bold', rotation=45)  # 横轴坐标名称
+    # 字体大小
     plt.xlim(-1, len(classes))  # 横轴坐标范围
     plt.xlabel('Predicted label', fontsize=20, fontweight='bold')  # 横轴坐标名称
-    plt.gca().xaxis.set_label_coords(0.5, -0.1)  # 横轴坐标名称位置
+    plt.gca().xaxis.set_label_coords(0.5, -0.2)  # 横轴坐标名称位置
 
-    plt.tick_params(labelsize=12)  # 坐标轴刻度字体大小粗细
+    plt.tick_params(labelsize=10)  # 坐标轴刻度字体大小粗细
     # ===============================
     plt.tight_layout()
     plt.show()

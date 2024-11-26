@@ -420,6 +420,12 @@ def train_RF(tts):
     print(classification_report(ValLabel, predictionsTest))
     print("Accuracy:", accuracy_score(ValLabel, predictionsTest))
 
+    # 混淆矩阵
+    from sklearn.metrics import confusion_matrix
+
+    cm = confusion_matrix(ValLabel, predictionsTest)
+    print(cm)
+
 # Transformer Parameters
 d_model = 128  # Embedding Size
 d_ff = 1024  # FeedForward dimension
@@ -432,32 +438,7 @@ Epoch = 100  # Epoch
 class_num = 15
 rand = 3407
 
-"""
-TEST Classification Report:
-              precision    recall  f1-score   support
 
-           0       0.98      0.94      0.96       194
-           1       0.97      1.00      0.98       202
-           2       1.00      1.00      1.00       179
-           3       1.00      1.00      1.00       205
-           4       1.00      1.00      1.00       201
-           5       0.99      0.99      0.99       192
-           6       1.00      0.99      1.00       197
-           7       0.99      1.00      1.00       213
-           8       1.00      1.00      1.00       192
-           9       1.00      1.00      1.00       201
-          10       1.00      1.00      1.00       213
-          11       0.99      0.99      0.99       195
-          12       0.85      0.85      0.85       185
-          13       1.00      1.00      1.00       222
-          14       0.87      0.87      0.87       209
-
-    accuracy                           0.98      3000
-   macro avg       0.98      0.98      0.98      3000
-weighted avg       0.98      0.98      0.98      3000
-
-Accuracy: 0.9763333333333334
-"""
 
 if __name__ == '__main__':
     # train_transformer_decoder(BatchSize, lr, Epoch, 0.2)
