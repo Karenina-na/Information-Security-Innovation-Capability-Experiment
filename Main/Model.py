@@ -17,6 +17,92 @@ from util.util import normalized, standardize, oneHot
 
 device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
+# scaled dot product attention
+class ScaledDotProductAttention(nn.Module):
+    def __init__(self, d_k):
+        super(ScaledDotProductAttention, self).__init__()
+
+        self.d_k = d_k
+
+    def forward(self, Q, K, V, attn_mask):
+        """
+        Q: [batch_size, n_heads, len_q, d_k]
+        K: [batch_size, n_heads, len_k, d_k]
+        V: [batch_size, n_heads, len_v(=len_k), d_v]
+        attn_mask: [batch_size, n_heads, seq_len, seq_len]
+        # attn = softmax(Q * K^T / sqrt(d_k))
+        # context = softmax(attn * V)
+        """
+        scores = torch.matmul(Q, K.transpose(-1, -2)) / np.sqrt(
+            self.d_k)  # scores : [batch_size, n_heads, len_q, len_k]
+        scores.masked_fill_(attn_mask, -1e9)  # Fills elements of self tensor with value where mask is True.
+
+        attn = nn.Softmax(dim=-1)(scores)  # attention : [batch_size, n_heads, len_q, len_k]
+        context = torch.matmul(attn, V)  # context : [batch_size, n_heads, len_q, d_v]
+        return context, attn
+
+
+# multi-head attention
+class MultiHeadAttention(nn.Module):
+    def __init__(self, d_model, d_k, d_v, n_heads):
+        super(MultiHeadAttention, self).__init__()
+        self.W_Q = nn.Linear(d_model, d_k * n_heads, bias=False)
+        self.W_K = nn.Linear(d_model, d_k * n_heads, bias=False)
+        self.W_V = nn.Linear(d_model, d_v * n_heads, bias=False)
+        self.fc = nn.Linear(n_heads * d_v, d_model, bias=False)
+        self.layer_norm = nn.LayerNorm(d_model, eps=1e-6)
+
+        self.d_model = d_model
+        self.d_k = d_k
+        self.d_v = d_v
+        self.n_heads = n_heads
+
+    def forward(self, input_Q, input_K, input_V, attn_mask):
+        """
+        input_Q: [batch_size, len_q, d_model]
+        input_K: [batch_size, len_k, d_model]
+        input_V: [batch_size, len_v(=len_k), d_model]
+        attn_mask: [batch_size, seq_len, seq_len]
+        """
+        residual, batch_size = input_Q, input_Q.size(0)
+        # (B, S, D) -proj-> (B, S, D_new) -split-> (B, S, H, W) -trans-> (B, H, S, W)
+        Q = self.W_Q(input_Q).view(batch_size, -1, self.n_heads, self.d_k). \
+            transpose(1, 2)  # Q: [batch_size, n_heads, len_q, d_k]
+        K = self.W_K(input_K).view(batch_size, -1, self.n_heads, self.d_k). \
+            transpose(1, 2)  # K: [batch_size, n_heads, len_k, d_k]
+        V = self.W_V(input_V).view(batch_size, -1, self.n_heads, self.d_v). \
+            transpose(1, 2)  # V: [batch_size, n_heads, len_v(=len_k), d_v]
+
+        attn_mask = attn_mask.unsqueeze(1). \
+            repeat(1, self.n_heads, 1, 1)  # attn_mask : [batch_size, n_heads, seq_len, seq_len]
+
+        # context: [batch_size, n_heads, len_q, d_v], attn: [batch_size, n_heads, len_q, len_k]
+        context, attn = ScaledDotProductAttention(self.d_k).forward(Q, K, V, attn_mask)
+        context = context.transpose(1, 2). \
+            reshape(batch_size, -1, self.n_heads * self.d_v)  # context: [batch_size, len_q, n_heads * d_v]
+        output = self.fc(context)  # [batch_size, len_q, d_model]
+        return self.layer_norm(output + residual), attn
+
+
+# position-wise feed forward net
+class PoswiseFeedForwardNet(nn.Module):
+    def __init__(self, d_model, d_ff):
+        super(PoswiseFeedForwardNet, self).__init__()
+        self.fc = nn.Sequential(
+            nn.Linear(d_model, d_ff, bias=False),
+            nn.ReLU(),
+            nn.Linear(d_ff, d_model, bias=False)
+        )
+        self.d_model = d_model
+        self.layer_norm = nn.LayerNorm(d_model, eps=1e-6)
+
+    def forward(self, inputs):
+        """
+        inputs: [batch_size, seq_len, d_model]
+        """
+        residual = inputs
+        output = self.fc(inputs)
+        return self.layer_norm(output + residual)  # [batch_size, seq_len, d_model]
 
 # 一维数据分类模型
 # position-wise feed forward net
@@ -358,76 +444,6 @@ def train_SVM(tts):
     cm = confusion_matrix(ValLabel, predictionsTest)
     print(cm)
 
-def train_RF(tts):
-    print("-" * 50)
-    path = "../Data/processed_data"
-    Data = Dataset(path, class_num, random_state=rand)
-
-    # 设定随机数
-    torch.manual_seed(rand)
-    torch.cuda.manual_seed(rand)
-    np.random.seed(rand)
-    Train, Val, TrainLabel, ValLabel = \
-        train_test_split(Data.data, Data.label_not_onehot, test_size=tts, random_state=rand, shuffle=True)
-    Test = Data.testData
-    TestLabel = Data.testLabel_not_onehot
-    Train = Train.reshape(-1, Train.shape[1], 1)
-    Val = Val.reshape(-1, Val.shape[1], 1)
-    Test = Test.reshape(-1, Test.shape[1], 1)
-
-    print("-" * 50)
-    print("X_train.shape: ", Train.shape)
-    print("X_test.shape: ", Val.shape)
-    print("labels_train.shape: ", TrainLabel.shape)
-    print("labels_test.shape: ", ValLabel.shape)
-    print("-" * 50)
-
-    # 数据处理
-    # Train = standardize(Train)
-    # Val = standardize(Val)
-    # Test = standardize(Test)
-    # Train = normalized(Train)
-    # Val = normalized(Val)
-    # Test = normalized(Test)
-    Train = Train.reshape(-1, Train.shape[1] * Train.shape[2])
-    Val = Val.reshape(-1, Val.shape[1] * Val.shape[2])
-    Test = Test.reshape(-1, Test.shape[1] * Test.shape[2])
-
-    # grid search
-    from sklearn.model_selection import GridSearchCV
-    from sklearn.model_selection import StratifiedKFold
-    from sklearn.metrics import classification_report
-    from sklearn.metrics import accuracy_score
-
-    parameters = {
-        'n_estimators': [100, 200],
-    }
-
-    # random forest
-    from sklearn.ensemble import RandomForestClassifier
-    RF = RandomForestClassifier()
-
-    cv = StratifiedKFold(n_splits=2, shuffle=True)
-    grid_search = GridSearchCV(RF, parameters, cv=cv, scoring='accuracy', verbose=2)
-    grid_search.fit(Train, TrainLabel)
-
-    best_model = grid_search.best_estimator_
-    print("-" * 50)
-    print("Best parameters found: ", grid_search.best_params_)
-    print("Best score: ", grid_search.best_score_)
-    print("-" * 50)
-    print("VAL Classification Report:")
-    predictionsTest = best_model.predict(Val)
-    print("TEST Classification Report:")
-    print(classification_report(ValLabel, predictionsTest))
-    print("Accuracy:", accuracy_score(ValLabel, predictionsTest))
-
-    # 混淆矩阵
-    from sklearn.metrics import confusion_matrix
-
-    cm = confusion_matrix(ValLabel, predictionsTest)
-    print(cm)
-
 # Transformer Parameters
 d_model = 128  # Embedding Size
 d_ff = 1024  # FeedForward dimension
@@ -445,4 +461,3 @@ rand = 3407
 if __name__ == '__main__':
     # train_transformer_decoder(BatchSize, lr, Epoch, 0.2)
     train_SVM(0.2)
-    # train_RF(0.2)
